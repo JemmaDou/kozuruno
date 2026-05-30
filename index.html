@@ -1,901 +1,517 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI 物理推演：探究空气阻力对抛体运动的影响</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-            background: #f0f4f8;
-            overflow: hidden;
-            height: 100vh;
-            display: flex;
-            flex-direction: column;
-        }
-        .header {
-            text-align: center;
-            padding: 12px;
-            background: linear-gradient(90deg, #1a73e8, #00c6ff);
-            color: white;
-            font-size: 22px;
-            font-weight: 600;
-            letter-spacing: 1px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-        }
-        .main-container {
-            flex: 1;
-            display: flex;
-            padding: 15px;
-            gap: 15px;
-            min-height: 0;
-        }
-        .panel {
-            background: white;
-            border-radius: 12px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.08);
-            padding: 18px;
-            display: flex;
-            flex-direction: column;
-        }
-        .panel-left { width: 220px; }
-        .panel-center { flex: 1; min-width: 0; position: relative; }
-        .panel-right { width: 280px; }
-
-        .panel-title {
-            font-size: 16px;
-            font-weight: 700;
-            color: #1a73e8;
-            margin-bottom: 15px;
-            padding-bottom: 8px;
-            border-bottom: 2px solid #e8f0fe;
-            display: flex;
-            align-items: center;
-            gap: 6px;
-        }
-        .param-item {
-            margin-bottom: 18px;
-            padding: 12px;
-            background: #f8f9fa;
-            border-radius: 8px;
-            border-left: 4px solid #ff6b6b;
-        }
-        .param-label {
-            font-size: 13px;
-            color: #666;
-            margin-bottom: 4px;
-        }
-        .param-value {
-            font-size: 28px;
-            font-weight: 700;
-            color: #ff6b6b;
-            font-family: "Courier New", monospace;
-        }
-        .param-unit {
-            font-size: 14px;
-            color: #999;
-            margin-left: 4px;
-        }
-
-        #canvas-container {
-            width: 100%;
-            height: 100%;
-            position: relative;
-            border-radius: 10px;
-            overflow: hidden;
-            border: 2px solid #e0e0e0;
-            background: linear-gradient(180deg, #e3f2fd 0%, #bbdefb 100%);
-        }
-        canvas { display: block; cursor: crosshair; }
-
-        .record-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 10px 12px;
-            margin-bottom: 8px;
-            background: #f8f9fa;
-            border-radius: 8px;
-            font-size: 14px;
-            transition: all 0.2s;
-        }
-        .record-item:hover { background: #e8f0fe; transform: translateX(3px); }
-        .record-hit { color: #00c853; font-weight: 700; }
-        .record-miss { color: #ff1744; font-weight: 700; }
-        .record-obj { font-weight: 600; color: #333; }
-
-        .stats-summary {
-            margin-top: 15px;
-            padding: 15px;
-            background: linear-gradient(135deg, #e3f2fd, #f3e5f5);
-            border-radius: 10px;
-            text-align: center;
-        }
-        .stats-summary .label { font-size: 13px; color: #666; margin-bottom: 5px; }
-        .stats-summary .value { font-size: 24px; font-weight: 700; color: #1a73e8; }
-
-        .bottom-bar {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 20px;
-            padding: 12px 20px;
-            background: white;
-            box-shadow: 0 -2px 10px rgba(0,0,0,0.05);
-        }
-        .control-group {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-        .control-label {
-            font-size: 14px;
-            color: #555;
-            font-weight: 500;
-        }
-        select {
-            padding: 8px 14px;
-            border-radius: 8px;
-            border: 2px solid #e0e0e0;
-            font-size: 14px;
-            background: white;
-            cursor: pointer;
-            outline: none;
-            transition: border-color 0.2s;
-        }
-        select:focus { border-color: #1a73e8; }
-
-        button {
-            padding: 9px 18px;
-            border: none;
-            border-radius: 8px;
-            font-size: 14px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s;
-            display: flex;
-            align-items: center;
-            gap: 6px;
-        }
-        .btn-clear {
-            background: #f5f5f5;
-            color: #666;
-            border: 2px solid #e0e0e0;
-        }
-        .btn-clear:hover { background: #ffebee; color: #c62828; border-color: #ef9a9a; }
-        .btn-report {
-            background: linear-gradient(90deg, #1a73e8, #00c6ff);
-            color: white;
-            box-shadow: 0 4px 12px rgba(26,115,232,0.3);
-        }
-        .btn-report:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(26,115,232,0.4); }
-
-        .hint {
-            position: absolute;
-            bottom: 10px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: rgba(0,0,0,0.6);
-            color: white;
-            padding: 6px 14px;
-            border-radius: 20px;
-            font-size: 12px;
-            pointer-events: none;
-            white-space: nowrap;
-        }
-
-        .report-modal {
-            display: none;
-            position: fixed;
-            top: 0; left: 0; right: 0; bottom: 0;
-            background: rgba(0,0,0,0.5);
-            z-index: 1000;
-            justify-content: center;
-            align-items: center;
-        }
-        .report-content {
-            background: white;
-            border-radius: 16px;
-            padding: 30px;
-            width: 700px;
-            max-height: 80vh;
-            overflow-y: auto;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-        }
-        .report-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
-        }
-        .report-title { font-size: 20px; font-weight: 700; color: #1a73e8; }
-        .close-btn {
-            width: 32px; height: 32px;
-            border-radius: 50%;
-            border: none;
-            background: #f5f5f5;
-            cursor: pointer;
-            font-size: 18px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        .close-btn:hover { background: #ffebee; color: #c62828; }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 10px;
-        }
-        th, td {
-            padding: 12px;
-            text-align: center;
-            border-bottom: 1px solid #e0e0e0;
-        }
-        th {
-            background: #f8f9fa;
-            font-weight: 600;
-            color: #555;
-            font-size: 14px;
-        }
-        td { font-size: 14px; color: #333; }
-        .badge {
-            padding: 4px 10px;
-            border-radius: 12px;
-            font-size: 12px;
-            font-weight: 600;
-        }
-        .badge-hit { background: #e8f5e9; color: #2e7d32; }
-        .badge-miss { background: #ffebee; color: #c62828; }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI投掷模拟：12米无人机目标 + 数据看板</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #f5f7fa;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    overflow-x: hidden;
+    color: #333;
+  }
+  .container {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 20px;
+  }
+  h1 {
+    text-align: center;
+    font-size: 22px;
+    color: #1a1a2e;
+    margin-bottom: 15px;
+    letter-spacing: 1px;
+  }
+  .main-layout {
+    display: flex;
+    gap: 15px;
+    margin-bottom: 15px;
+  }
+  .left-panel {
+    width: 260px;
+    flex-shrink: 0;
+    background: #fff;
+    border-radius: 12px;
+    padding: 15px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+  }
+  .section-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: #555;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .object-card {
+    border: 2px solid #e0e0e0;
+    border-radius: 10px;
+    padding: 10px;
+    margin-bottom: 10px;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .object-card:hover { border-color: #aaa; }
+  .object-card.active {
+    border-color: #ff4444;
+    background: #fff8f8;
+    box-shadow: 0 0 0 3px rgba(255,68,68,0.1);
+  }
+  .object-icon {
+    width: 28px; height: 28px; border-radius: 50%; flex-shrink: 0;
+  }
+  .object-info { flex: 1; }
+  .object-name { font-size: 15px; font-weight: 600; }
+  .object-meta { font-size: 12px; color: #888; margin-top: 2px; }
+  .realtime-params {
+    background: #fafafa;
+    border-radius: 8px;
+    padding: 12px;
+    margin-top: 15px;
+    font-size: 13px;
+  }
+  .param-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 5px 0;
+    border-bottom: 1px dashed #eee;
+  }
+  .param-row:last-child { border-bottom: none; }
+  .param-label { color: #666; }
+  .param-value { font-weight: 600; color: #222; font-family: "Courier New", monospace; }
+  .param-value.hit { color: #00aa00; }
+  .param-value.miss { color: #cc0000; }
+  .reset-btn {
+    width: 100%;
+    margin-top: 12px;
+    padding: 10px;
+    background: #c0392b;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 14px;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+  .reset-btn:hover { background: #a93226; }
+  .canvas-wrapper {
+    flex: 1;
+    background: #e8f4fc;
+    border-radius: 12px;
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+  }
+  canvas {
+    display: block;
+    width: 100%;
+    height: 520px;
+    cursor: crosshair;
+  }
+  .canvas-hint {
+    position: absolute;
+    bottom: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 12px;
+    color: #888;
+    background: rgba(255,255,255,0.8);
+    padding: 4px 12px;
+    border-radius: 20px;
+    pointer-events: none;
+  }
+  .legend {
+    position: absolute;
+    bottom: 35px;
+    left: 15px;
+    display: flex;
+    gap: 15px;
+    font-size: 12px;
+    background: rgba(255,255,255,0.85);
+    padding: 6px 12px;
+    border-radius: 8px;
+    pointer-events: none;
+  }
+  .legend-item { display: flex; align-items: center; gap: 5px; }
+  .legend-line { width: 20px; height: 3px; border-radius: 2px; }
+  .bottom-panel {
+    background: #fff;
+    border-radius: 12px;
+    padding: 15px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+    margin-bottom: 15px;
+  }
+  .table-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: #444;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  th {
+    background: #2d6a4f;
+    color: white;
+    padding: 10px 8px;
+    text-align: center;
+    font-weight: 500;
+  }
+  td {
+    padding: 10px 8px;
+    text-align: center;
+    border-bottom: 1px solid #eee;
+  }
+  tr:hover { background: #f8f9fa; }
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .badge-hit { background: #d4edda; color: #155724; }
+  .badge-miss { background: #f8d7da; color: #721c24; }
+  .insights {
+    background: #f0f9ff;
+    border-left: 4px solid #3498db;
+    padding: 12px 15px;
+    border-radius: 0 8px 8px 0;
+    margin-top: 10px;
+    font-size: 13px;
+    line-height: 1.6;
+    color: #555;
+  }
+  .insights strong { color: #2980b9; }
+  .formula-box {
+    background: #fff3e0;
+    border-radius: 10px;
+    padding: 15px;
+    margin-bottom: 15px;
+    text-align: center;
+    border: 1px solid #ffe0b2;
+  }
+  .formula-title {
+    font-size: 13px;
+    color: #e65100;
+    margin-bottom: 8px;
+    font-weight: 600;
+  }
+  .formula {
+    font-size: 18px;
+    color: #bf360c;
+    font-family: "Courier New", monospace;
+    font-weight: 700;
+  }
+  .formula-sub {
+    font-size: 12px;
+    color: #888;
+    margin-top: 6px;
+  }
+</style>
 </head>
 <body>
-    <div class="header">🎯 AI 物理推演：探究空气阻力对抛体运动的影响</div>
-
-    <div class="main-container">
-        <div class="panel panel-left">
-            <div class="panel-title">📡 实时发射参数</div>
-            <div class="param-item">
-                <div class="param-label">初速度 V₀</div>
-                <div><span class="param-value" id="v0-display">0.0</span><span class="param-unit">m/s</span></div>
-            </div>
-            <div class="param-item" style="border-left-color: #ffa726;">
-                <div class="param-label">仰角 θ</div>
-                <div><span class="param-value" id="theta-display">0.0</span><span class="param-unit">°</span></div>
-            </div>
-            <div style="margin-top: auto; padding: 12px; background: #fff3e0; border-radius: 8px; font-size: 12px; color: #666; line-height: 1.6;">
-                <strong>操作提示：</strong><br>
-                • 向后下方拖拽弹弓发射<br>
-                • 1/2/3/4 切换物体<br>
-                • R 键重置场景
-            </div>
-        </div>
-
-        <div class="panel panel-center">
-            <div id="canvas-container">
-                <canvas id="simCanvas"></canvas>
-                <div class="hint">向后下方拖拽弹弓发射 | 1/2/3/4 切换物体 | R 重置</div>
-            </div>
-        </div>
-
-        <div class="panel panel-right">
-            <div class="panel-title">📊 交叉对比测录</div>
-            <div id="records-list" style="flex: 1; overflow-y: auto; max-height: 400px;">
-                <div style="text-align: center; color: #999; padding: 40px 0; font-size: 14px;">暂无发射记录</div>
-            </div>
-            <div class="stats-summary">
-                <div class="label">命中率统计</div>
-                <div class="value" id="hit-rate">0 / 0 (0%)</div>
-            </div>
-        </div>
+<div class="container">
+  <h1>谁的"命中率"更高？</h1>
+  <div class="formula-box">
+    <div class="formula-title">核心公式：重新定义"命中率"的数学逻辑</div>
+    <div class="formula">命中率 = 命中数量 ÷ 总尝试数量</div>
+    <div class="formula-sub">通俗示例：投篮20次，投中8次。命中率 = 8 ÷ 20 = 0.4 = 40%</div>
+  </div>
+  <div class="main-layout">
+    <div class="left-panel">
+      <div class="section-title">🎯 标准选型</div>
+      <div id="objectList"></div>
+      <div class="section-title">📡 实时发射参数</div>
+      <div class="realtime-params" id="realtimeParams">
+        <div class="param-row"><span class="param-label">状态</span><span class="param-value" id="p-status">等待发射</span></div>
+        <div class="param-row"><span class="param-label">初速度 v₀</span><span class="param-value" id="p-v0">— m/s</span></div>
+        <div class="param-row"><span class="param-label">仰角 θ</span><span class="param-value" id="p-angle">— °</span></div>
+        <div class="param-row"><span class="param-label">时间 t</span><span class="param-value" id="p-time">— s</span></div>
+        <div class="param-row"><span class="param-label">水平距离 x</span><span class="param-value" id="p-x">— m</span></div>
+        <div class="param-row"><span class="param-label">垂直高度 y</span><span class="param-value" id="p-y">— m</span></div>
+        <div class="param-row"><span class="param-label">空气阻力</span><span class="param-value" id="p-drag">— N</span></div>
+      </div>
+      <button class="reset-btn" onclick="resetAll()">🗑️ 清空所有数据</button>
     </div>
-
-    <div class="bottom-bar">
-        <div class="control-group">
-            <span class="control-label">实时切换物体以做对比：</span>
-            <select id="object-select">
-                <option value="0">篮球 (质量大, 阻力大 m=0.62kg, Cd=0.47)</option>
-                <option value="1">网球 (质量小, 阻力大 m=0.057kg, Cd=0.50)</option>
-                <option value="2">棒球 (质量适中, 阻力小 m=0.145kg, Cd=0.35)</option>
-                <option value="3">箭 (质量极小, 阻力大 m=0.025kg, Cd=0.75)</option>
-            </select>
-        </div>
-        <button class="btn-clear" onclick="clearAll()">🗑️ 清空所有数据</button>
-        <button class="btn-report" onclick="generateReport()">📊 结束测试并生成对比报表</button>
+    <div class="canvas-wrapper">
+      <canvas id="simCanvas" width="1050" height="520"></canvas>
+      <div class="legend">
+        <div class="legend-item"><div style="width:20px;height:3px;background:repeating-linear-gradient(90deg,#ff8c00,#ff8c00 4px,transparent 4px,transparent 8px);"></div><span>橙色虚线 = 理想抛物线（理论值）</span></div>
+        <div class="legend-item"><div class="legend-line" style="background:#0066cc;"></div><span>蓝色实线 = 实际轨迹（空气阻力）</span></div>
+      </div>
+      <div class="canvas-hint">向后下方拖拽弹弓发射 | 1/2/3/4 切换物体 | R 重置</div>
     </div>
-
-    <div class="report-modal" id="report-modal">
-        <div class="report-content">
-            <div class="report-header">
-                <div class="report-title">📋 物理推演对比报表</div>
-                <button class="close-btn" onclick="closeReport()">×</button>
-            </div>
-            <div id="report-body"></div>
-        </div>
+  </div>
+  <div class="bottom-panel">
+    <div class="table-title">📊 数据探究：交叉对比测录表</div>
+    <table>
+      <thead>
+        <tr>
+          <th>运动项目</th><th>运动员</th><th>理论命中率</th><th>测试次数</th><th>命中次数</th><th>模拟命中率</th><th>平均落点偏差</th>
+        </tr>
+      </thead>
+      <tbody id="crossTableBody"></tbody>
+    </table>
+    <div class="insights">
+      <strong>🔑 关键洞察：</strong>命中数值越高，意味着你在相同的能力范围内，失误越少，击中目标的概率越大。它是我们在不确定中寻找确定性的重要数学工具。<br>
+      <strong>🧠 深度思考：</strong>同一场景下，命中率 = 命中数 ÷ 总尝试数。总尝试次数只是统计基数，不会直接拉高/降低命中率；仅当样本量（尝试次数）越大，算出的命中率越贴近真实水平。
     </div>
-
-    <script>
-        // ==================== 物理参数 ====================
-        const SCALE = 60;
-        const G = 9.8;
-        const RHO = 1.225;
-        const GROUND_Y_RATIO = 0.72;
-        const SLING_X_RATIO = 0.12;
-        const SLING_Y_OFFSET = 50;
-        const TARGET_DISTANCE = 12;
-
-        const OBJECTS = [
-            { name: "篮球", mass: 0.62, d: 0.24, Cd: 0.47, color: "#ff8c00", r: 12, max_v: 12, hit_rate: 0.30 },
-            { name: "网球", mass: 0.057, d: 0.067, Cd: 0.50, color: "#32cd32", r: 6, max_v: 40, hit_rate: 0.15 },
-            { name: "棒球", mass: 0.145, d: 0.074, Cd: 0.35, color: "#ffd700", r: 7, max_v: 35, hit_rate: 0.40 },
-            { name: "箭", mass: 0.025, d: 0.009, Cd: 0.75, color: "#8b4513", r: 4, max_v: 55, hit_rate: 0.925 }
-        ];
-
-        // ==================== Canvas 设置 ====================
-        const canvas = document.getElementById('simCanvas');
-        const ctx = canvas.getContext('2d');
-        const container = document.getElementById('canvas-container');
-
-        let WIDTH, HEIGHT;
-        let GROUND_Y, SLING_X, SLING_Y, TARGET_X, TARGET_Y;
-
-        function resize() {
-            WIDTH = container.clientWidth;
-            HEIGHT = container.clientHeight;
-            canvas.width = WIDTH;
-            canvas.height = HEIGHT;
-            GROUND_Y = HEIGHT * GROUND_Y_RATIO;
-            SLING_X = WIDTH * SLING_X_RATIO;
-            SLING_Y = GROUND_Y - SLING_Y_OFFSET;
-            TARGET_X = SLING_X + TARGET_DISTANCE * SCALE;
-            TARGET_Y = GROUND_Y - 40;
-        }
-        window.addEventListener('resize', resize);
-        resize();
-
-        // ==================== 状态 ====================
-        let currentIdx = 0;
-        let projectiles = [];
-        let dragging = false;
-        let dragCurrent = null;
-        let records = [];
-        let stats = { total: [0,0,0,0], hits: [0,0,0,0] };
-        let animationId;
-
-        // ==================== 物理引擎 ====================
-        class Projectile {
-            constructor(vx_mps, vy_mps, idx) {
-                this.x = SLING_X;
-                this.y = SLING_Y;
-                this.vx = vx_mps * SCALE;
-                this.vy = -vy_mps * SCALE;
-                this.obj = OBJECTS[idx];
-                this.trail = [];
-                this.landed = false;
-                this.hit = false;
-                this.objIdx = idx;
-                this.A = Math.PI * (this.obj.d / 2) ** 2;
-                this.mass = this.obj.mass;
-                this.Cd = this.obj.Cd;
-                this.startTime = Date.now();
-            }
-
-            update(dt) {
-                if (this.landed) return;
-
-                this.trail.push({x: this.x, y: this.y});
-                if (this.trail.length > 300) this.trail.shift();
-
-                const subSteps = 10;
-                const subDt = dt / subSteps;
-
-                for (let i = 0; i < subSteps; i++) {
-                    const v = Math.sqrt(this.vx**2 + this.vy**2);
-                    const v_mps = v / SCALE;
-
-                    let ax, ay;
-                    if (v_mps > 0.1) {
-                        const F = 0.5 * RHO * v_mps**2 * this.Cd * this.A;
-                        const a = F / this.mass * SCALE;
-                        ax = -a * (this.vx / v);
-                        ay = -a * (this.vy / v);
-                    } else {
-                        ax = 0; ay = 0;
-                    }
-
-                    ay += G * SCALE;
-
-                    this.vx += ax * subDt;
-                    this.vy += ay * subDt;
-                    this.x += this.vx * subDt;
-                    this.y += this.vy * subDt;
-
-                    if (this.y >= GROUND_Y - this.obj.r) {
-                        this.y = GROUND_Y - this.obj.r;
-                        this.landed = true;
-                        const dist = Math.abs(this.x - TARGET_X) / SCALE;
-                        this.hit = dist < 0.5;
-                        this.dist = dist;
-                        updateStats(this.objIdx, this.hit, dist, this.obj.name);
-                        return;
-                    }
-                }
-            }
-
-            draw(ctx) {
-                if (this.trail.length > 1) {
-                    ctx.beginPath();
-                    ctx.strokeStyle = this.hit ? "#ff6b6b" : "#6495ed";
-                    ctx.lineWidth = 2;
-                    for (let i = 0; i < this.trail.length; i++) {
-                        if (i === 0) ctx.moveTo(this.trail[i].x, this.trail[i].y);
-                        else ctx.lineTo(this.trail[i].x, this.trail[i].y);
-                    }
-                    ctx.stroke();
-                }
-
-                ctx.beginPath();
-                ctx.fillStyle = this.obj.color;
-                ctx.arc(this.x, this.y, this.obj.r, 0, Math.PI * 2);
-                ctx.fill();
-                ctx.strokeStyle = "#000";
-                ctx.lineWidth = 2;
-                ctx.stroke();
-
-                if (this.landed) {
-                    ctx.font = "bold 16px Arial";
-                    if (this.hit) {
-                        ctx.fillStyle = "#ff0000";
-                        ctx.fillText("命中！", this.x - 25, this.y - 35);
-                    } else {
-                        ctx.fillStyle = "#666";
-                        ctx.fillText(`偏差${this.dist.toFixed(1)}米`, this.x - 35, this.y - 25);
-                    }
-                }
-            }
-        }
-
-        function updateStats(idx, hit, dist, name) {
-            stats.total[idx]++;
-            if (hit) stats.hits[idx]++;
-            records.unshift({
-                id: records.length + 1,
-                name: name,
-                objIdx: idx,
-                hit: hit,
-                dist: dist,
-                time: new Date().toLocaleTimeString()
-            });
-            updateUI();
-        }
-
-        // ==================== 绘制场景 ====================
-        function drawBackground() {
-            // 天空渐变
-            const grad = ctx.createLinearGradient(0, 0, 0, HEIGHT);
-            grad.addColorStop(0, "#e3f2fd");
-            grad.addColorStop(1, "#bbdefb");
-            ctx.fillStyle = grad;
-            ctx.fillRect(0, 0, WIDTH, HEIGHT);
-
-            // 地面
-            ctx.fillStyle = "#228b22";
-            ctx.fillRect(0, GROUND_Y, WIDTH, HEIGHT - GROUND_Y);
-            ctx.beginPath();
-            ctx.moveTo(0, GROUND_Y);
-            ctx.lineTo(WIDTH, GROUND_Y);
-            ctx.strokeStyle = "#000";
-            ctx.lineWidth = 3;
-            ctx.stroke();
-
-            // 距离标尺
-            ctx.fillStyle = "#444";
-            ctx.font = "12px Arial";
-            for (let m = 0; m <= 18; m += 2) {
-                const x = SLING_X + m * SCALE;
-                if (x > WIDTH - 50) break;
-                ctx.beginPath();
-                ctx.moveTo(x, GROUND_Y);
-                ctx.lineTo(x, GROUND_Y + 15);
-                ctx.lineWidth = 2;
-                ctx.strokeStyle = "#555";
-                ctx.stroke();
-                ctx.fillText(`${m}m`, x - 8, GROUND_Y + 30);
-            }
-
-            // 12米目标线
-            const x12 = SLING_X + 12 * SCALE;
-            ctx.beginPath();
-            ctx.moveTo(x12, GROUND_Y - 100);
-            ctx.lineTo(x12, GROUND_Y + 15);
-            ctx.strokeStyle = "#ff0000";
-            ctx.lineWidth = 3;
-            ctx.stroke();
-
-            ctx.font = "bold 14px Arial";
-            ctx.fillStyle = "#ff0000";
-            ctx.fillText("12米 目标", x12 - 35, GROUND_Y - 110);
-        }
-
-        function drawTarget() {
-            ctx.fillStyle = "#555";
-            ctx.fillRect(TARGET_X - 20, TARGET_Y - 15, 40, 30);
-            ctx.beginPath();
-            ctx.fillStyle = "#ff0000";
-            ctx.arc(TARGET_X, TARGET_Y, 5, 0, Math.PI * 2);
-            ctx.fill();
-
-            // 无人机图标简化版
-            ctx.font = "20px Arial";
-            ctx.fillText("🚁", TARGET_X - 12, TARGET_Y - 25);
-        }
-
-        function drawSling() {
-            ctx.strokeStyle = "#8b4513";
-            ctx.lineWidth = 8;
-            ctx.beginPath();
-            ctx.moveTo(SLING_X - 20, GROUND_Y);
-            ctx.lineTo(SLING_X, SLING_Y);
-            ctx.stroke();
-            ctx.beginPath();
-            ctx.moveTo(SLING_X + 20, GROUND_Y);
-            ctx.lineTo(SLING_X, SLING_Y);
-            ctx.stroke();
-
-            if (dragging && dragCurrent) {
-                ctx.strokeStyle = "#b00000";
-                ctx.lineWidth = 5;
-                ctx.beginPath();
-                ctx.moveTo(SLING_X - 15, SLING_Y);
-                ctx.lineTo(dragCurrent.x, dragCurrent.y);
-                ctx.stroke();
-                ctx.beginPath();
-                ctx.moveTo(SLING_X + 15, SLING_Y);
-                ctx.lineTo(dragCurrent.x, dragCurrent.y);
-                ctx.stroke();
-
-                // 预览轨迹
-                drawPreview();
-
-                // 拖拽球
-                ctx.beginPath();
-                ctx.fillStyle = OBJECTS[currentIdx].color;
-                ctx.arc(dragCurrent.x, dragCurrent.y, OBJECTS[currentIdx].r, 0, Math.PI * 2);
-                ctx.fill();
-                ctx.strokeStyle = "#000";
-                ctx.lineWidth = 2;
-                ctx.stroke();
-            }
-        }
-
-        function drawPreview() {
-            const drag_dx = SLING_X - dragCurrent.x;
-            const drag_dy = SLING_Y - dragCurrent.y;
-            const power = 0.15;
-            let vx = drag_dx * power;
-            let vy = -drag_dy * power;
-
-            const max_v = OBJECTS[currentIdx].max_v;
-            const v_total = Math.sqrt(vx**2 + vy**2);
-            if (v_total > max_v) {
-                const s = max_v / v_total;
-                vx *= s; vy *= s;
-            }
-
-            const obj = OBJECTS[currentIdx];
-            const m = obj.mass;
-            const d = obj.d;
-            const Cd = obj.Cd;
-            const A = Math.PI * (d / 2) ** 2;
-
-            let px = SLING_X, py = SLING_Y;
-            let pvx = vx * SCALE, pvy = -vy * SCALE;
-            const dt = 0.005;
-
-            for (let i = 0; i < 100; i++) {
-                const v = Math.sqrt(pvx**2 + pvy**2);
-                const v_mps = v / SCALE;
-
-                let ax, ay;
-                if (v_mps > 0.1) {
-                    const F = 0.5 * RHO * v_mps**2 * Cd * A;
-                    const a = F / m * SCALE;
-                    ax = -a * (pvx / v);
-                    ay = -a * (pvy / v);
-                } else { ax = 0; ay = 0; }
-
-                ay += G * SCALE;
-                pvx += ax * dt; pvy += ay * dt;
-                px += pvx * dt; py += pvy * dt;
-
-                if (py >= GROUND_Y) break;
-
-                if (i % 3 === 0) {
-                    const brightness = Math.max(60, 180 - i * 1.5);
-                    ctx.beginPath();
-                    ctx.fillStyle = `rgb(${brightness},${brightness},${brightness})`;
-                    ctx.arc(px, py, 3, 0, Math.PI * 2);
-                    ctx.fill();
-                }
-            }
-        }
-
-        function drawUI() {
-            // 物体选择按钮（Canvas 内左上角）
-            ctx.font = "bold 14px Arial";
-            for (let i = 0; i < OBJECTS.length; i++) {
-                const x = 20 + i * 150;
-                const y = 20;
-                const w = 140, h = 40;
-
-                ctx.fillStyle = i === currentIdx ? OBJECTS[i].color : "#f0f0f0";
-                ctx.fillRect(x, y, w, h);
-                ctx.strokeStyle = i === currentIdx ? "#ff0000" : "#999";
-                ctx.lineWidth = i === currentIdx ? 3 : 1;
-                ctx.strokeRect(x, y, w, h);
-
-                ctx.fillStyle = i === currentIdx ? "#fff" : "#333";
-                ctx.fillText(OBJECTS[i].name, x + 10, y + 25);
-            }
-        }
-
-        // ==================== 主循环 ====================
-        let lastTime = 0;
-        function loop(timestamp) {
-            const dt = Math.min((timestamp - lastTime) / 1000, 0.05) || 0.016;
-            lastTime = timestamp;
-
-            drawBackground();
-            drawTarget();
-            drawSling();
-            drawUI();
-
-            for (const p of projectiles) {
-                p.update(dt);
-                p.draw(ctx);
-            }
-
-            animationId = requestAnimationFrame(loop);
-        }
-        requestAnimationFrame(loop);
-
-        // ==================== 交互事件 ====================
-        function getMousePos(e) {
-            const rect = canvas.getBoundingClientRect();
-            return { x: e.clientX - rect.left, y: e.clientY - rect.top };
-        }
-
-        canvas.addEventListener('mousedown', e => {
-            const pos = getMousePos(e);
-
-            // 检查是否点击物体按钮
-            for (let i = 0; i < OBJECTS.length; i++) {
-                const bx = 20 + i * 150, by = 20;
-                if (pos.x >= bx && pos.x <= bx + 140 && pos.y >= by && pos.y <= by + 40) {
-                    currentIdx = i;
-                    document.getElementById('object-select').value = i;
-                    updateUI();
-                    return;
-                }
-            }
-
-            // 检查弹弓区域
-            const dx = pos.x - SLING_X;
-            const dy = pos.y - SLING_Y;
-            if (Math.sqrt(dx*dx + dy*dy) < 100) {
-                dragging = true;
-                dragCurrent = pos;
-            }
-        });
-
-        canvas.addEventListener('mousemove', e => {
-            if (dragging) {
-                dragCurrent = getMousePos(e);
-                updateParamsDisplay();
-            }
-        });
-
-        canvas.addEventListener('mouseup', e => {
-            if (!dragging) return;
-            dragging = false;
-
-            const drag_dx = SLING_X - dragCurrent.x;
-            const drag_dy = SLING_Y - dragCurrent.y;
-            const power = 0.15;
-            let vx = drag_dx * power;
-            let vy = -drag_dy * power;
-
-            const max_v = OBJECTS[currentIdx].max_v;
-            const v_total = Math.sqrt(vx**2 + vy**2);
-            if (v_total > max_v) {
-                const s = max_v / v_total;
-                vx *= s; vy *= s;
-            }
-
-            projectiles.push(new Projectile(vx, vy, currentIdx));
-            document.getElementById('v0-display').textContent = "0.0";
-            document.getElementById('theta-display').textContent = "0.0";
-        });
-
-        canvas.addEventListener('mouseleave', () => {
-            dragging = false;
-            document.getElementById('v0-display').textContent = "0.0";
-            document.getElementById('theta-display').textContent = "0.0";
-        });
-
-        function updateParamsDisplay() {
-            if (!dragCurrent) return;
-            const drag_dx = SLING_X - dragCurrent.x;
-            const drag_dy = SLING_Y - dragCurrent.y;
-            const power = 0.15;
-            let vx = drag_dx * power;
-            let vy = -drag_dy * power;
-
-            const max_v = OBJECTS[currentIdx].max_v;
-            const v_total = Math.sqrt(vx**2 + vy**2);
-            if (v_total > max_v) {
-                const s = max_v / v_total;
-                vx *= s; vy *= s;
-            }
-
-            const v0 = Math.sqrt(vx**2 + vy**2);
-            const theta = Math.atan2(vy, vx) * 180 / Math.PI;
-
-            document.getElementById('v0-display').textContent = v0.toFixed(1);
-            document.getElementById('theta-display').textContent = theta.toFixed(1);
-        }
-
-        document.addEventListener('keydown', e => {
-            if (e.key === 'r' || e.key === 'R') {
-                projectiles = [];
-                records = [];
-                stats = { total: [0,0,0,0], hits: [0,0,0,0] };
-                updateUI();
-            } else if (e.key >= '1' && e.key <= '4') {
-                currentIdx = parseInt(e.key) - 1;
-                document.getElementById('object-select').value = currentIdx;
-                updateUI();
-            }
-        });
-
-        document.getElementById('object-select').addEventListener('change', e => {
-            currentIdx = parseInt(e.target.value);
-            updateUI();
-        });
-
-        // ==================== UI 更新 ====================
-        function updateUI() {
-            // 更新记录列表
-            const list = document.getElementById('records-list');
-            if (records.length === 0) {
-                list.innerHTML = '<div style="text-align: center; color: #999; padding: 40px 0; font-size: 14px;">暂无发射记录</div>';
-            } else {
-                list.innerHTML = records.slice(0, 50).map(r => `
-                    <div class="record-item">
-                        <span>第 ${r.id} 次 (<span class="record-obj">${r.name}</span>):</span>
-                        <span class="${r.hit ? 'record-hit' : 'record-miss'}">${r.hit ? '命中' : 'Miss'}</span>
-                    </div>
-                `).join('');
-            }
-
-            // 更新命中率
-            const total = stats.total.reduce((a,b) => a+b, 0);
-            const hits = stats.hits.reduce((a,b) => a+b, 0);
-            const rate = total > 0 ? (hits / total * 100).toFixed(0) : 0;
-            document.getElementById('hit-rate').textContent = `${hits} / ${total} (${rate}%)`;
-        }
-
-        function clearAll() {
-            projectiles = [];
-            records = [];
-            stats = { total: [0,0,0,0], hits: [0,0,0,0] };
-            updateUI();
-        }
-
-        // ==================== 报表生成 ====================
-        function generateReport() {
-            const modal = document.getElementById('report-modal');
-            const body = document.getElementById('report-body');
-
-            let html = `
-                <h3 style="margin-bottom: 15px; color: #333;">各物体发射统计</h3>
-                <table>
-                    <tr>
-                        <th>物体</th>
-                        <th>总发射次数</th>
-                        <th>命中次数</th>
-                        <th>命中率</th>
-                        <th>目标命中率</th>
-                        <th>评价</th>
-                    </tr>
-            `;
-
-            for (let i = 0; i < OBJECTS.length; i++) {
-                const total = stats.total[i];
-                const hits = stats.hits[i];
-                const rate = total > 0 ? (hits / total * 100).toFixed(1) : 0;
-                const targetRate = (OBJECTS[i].hit_rate * 100).toFixed(1);
-                const diff = (rate - targetRate).toFixed(1);
-                let evalText = diff >= 0 ? `✅ 达标 (+${diff}%)` : `⚠️ 未达标 (${diff}%)`;
-                if (total === 0) evalText = "—";
-
-                html += `
-                    <tr>
-                        <td><strong style="color: ${OBJECTS[i].color}">●</strong> ${OBJECTS[i].name}</td>
-                        <td>${total}</td>
-                        <td>${hits}</td>
-                        <td>${rate}%</td>
-                        <td>${targetRate}%</td>
-                        <td>${evalText}</td>
-                    </tr>
-                `;
-            }
-
-            html += `</table>`;
-
-            if (records.length > 0) {
-                html += `
-                    <h3 style="margin: 25px 0 15px; color: #333;">详细发射记录</h3>
-                    <table>
-                        <tr>
-                            <th>序号</th>
-                            <th>时间</th>
-                            <th>物体</th>
-                            <th>结果</th>
-                            <th>偏差距离</th>
-                        </tr>
-                `;
-
-                // 按原始顺序显示（records 是倒序的，所以反转）
-                const sorted = [...records].reverse();
-                for (const r of sorted) {
-                    html += `
-                        <tr>
-                            <td>${r.id}</td>
-                            <td>${r.time}</td>
-                            <td>${r.name}</td>
-                            <td><span class="badge ${r.hit ? 'badge-hit' : 'badge-miss'}">${r.hit ? '命中' : '未命中'}</span></td>
-                            <td>${r.hit ? '—' : r.dist.toFixed(2) + ' 米'}</td>
-                        </tr>
-                    `;
-                }
-                html += `</table>`;
-            }
-
-            html += `
-                <div style="margin-top: 25px; text-align: center;">
-                    <button class="btn-report" onclick="exportCSV()">📥 导出 CSV 数据</button>
-                </div>
-            `;
-
-            body.innerHTML = html;
-            modal.style.display = 'flex';
-        }
-
-        function closeReport() {
-            document.getElementById('report-modal').style.display = 'none';
-        }
-
-        function exportCSV() {
-            let csv = "序号,时间,物体,结果,偏差距离(米)\n";
-            const sorted = [...records].reverse();
-            for (const r of sorted) {
-                csv += `${r.id},${r.time},${r.name},${r.hit ? '命中' : '未命中'},${r.hit ? '' : r.dist.toFixed(2)}\n`;
-            }
-
-            const blob = new Blob(["\ufeff" + csv], { type: 'text/csv;charset=utf-8;' });
-            const link = document.createElement("a");
-            link.href = URL.createObjectURL(blob);
-            link.download = `物理推演数据_${new Date().toLocaleDateString()}.csv`;
-            link.click();
-        }
-
-        // 点击模态框背景关闭
-        document.getElementById('report-modal').addEventListener('click', e => {
-            if (e.target === document.getElementById('report-modal')) closeReport();
-        });
-
-        updateUI();
-    </script>
+  </div>
+</div>
+
+<script>
+const SCALE = 60;
+const G = 9.8;
+const RHO = 1.225;
+const GROUND_Y = 400;
+const SLING_X = 120;
+const SLING_Y = GROUND_Y - 50;
+const TARGET_X = SLING_X + 12 * SCALE;
+const TARGET_Y = GROUND_Y - 40;
+
+const OBJECTS = [
+  { name: "篮球", mass: 0.62, d: 0.24, Cd: 0.47, color: "#ff8c00", r: 12, max_v: 12, hit_rate: 0.30 },
+  { name: "网球", mass: 0.057, d: 0.067, Cd: 0.50, color: "#32cd32", r: 6, max_v: 40, hit_rate: 0.15 },
+  { name: "棒球", mass: 0.145, d: 0.074, Cd: 0.35, color: "#ffd700", r: 7, max_v: 35, hit_rate: 0.40 },
+  { name: "箭",   mass: 0.025, d: 0.009, Cd: 0.75, color: "#8b4513", r: 4, max_v: 55, hit_rate: 0.925 }
+];
+
+let currentIdx = 0;
+let projectiles = [];
+let dragging = false;
+let dragCurrent = null;
+const stats = { total: [0,0,0,0], hits: [0,0,0,0], distances: [[],[],[],[]] };
+const crossLog = [];
+const canvas = document.getElementById('simCanvas');
+const ctx = canvas.getContext('2d');
+
+function initUI() {
+  const list = document.getElementById('objectList');
+  list.innerHTML = '';
+  OBJECTS.forEach((obj, i) => {
+    const card = document.createElement('div');
+    card.className = `object-card ${i === currentIdx ? 'active' : ''}`;
+    card.onclick = () => { currentIdx = i; initUI(); };
+    card.innerHTML = `<div class="object-icon" style="background:${obj.color};"></div><div class="object-info"><div class="object-name">${obj.name}</div><div class="object-meta">m=${obj.mass}kg, k≈${(0.5*RHO*obj.Cd*Math.PI*(obj.d/2)**2).toFixed(3)}</div></div>`;
+    list.appendChild(card);
+  });
+}
+initUI();
+
+class Projectile {
+  constructor(vxMps, vyMps, idx) {
+    this.x = SLING_X; this.y = SLING_Y;
+    this.vx = vxMps * SCALE; this.vy = -vyMps * SCALE;
+    this.obj = OBJECTS[idx]; this.trail = []; this.landed = false; this.hit = false;
+    this.objIdx = idx; this.A = Math.PI * (this.obj.d / 2) ** 2;
+    this.mass = this.obj.mass; this.Cd = this.obj.Cd;
+    this.v0Mps = Math.sqrt(vxMps**2 + vyMps**2);
+    this.angleDeg = Math.atan2(vyMps, vxMps) * 180 / Math.PI;
+    this.startTime = performance.now(); this.flightTime = 0; this.maxDrag = 0;
+  }
+  update(dt) {
+    if (this.landed) return;
+    this.trail.push({ x: this.x, y: this.y });
+    if (this.trail.length > 300) this.trail.shift();
+    const subSteps = 10, subDt = dt / subSteps;
+    for (let step = 0; step < subSteps; step++) {
+      const v = Math.sqrt(this.vx**2 + this.vy**2);
+      const vMps = v / SCALE;
+      let ax = 0, ay = 0;
+      if (vMps > 0.1) {
+        const F = 0.5 * RHO * vMps**2 * this.Cd * this.A;
+        if (F > this.maxDrag) this.maxDrag = F;
+        const a = F / this.mass * SCALE;
+        ax = -a * (this.vx / v); ay = -a * (this.vy / v);
+      }
+      ay += G * SCALE;
+      this.vx += ax * subDt; this.vy += ay * subDt;
+      this.x += this.vx * subDt; this.y += this.vy * subDt;
+      if (this.y >= GROUND_Y - this.obj.r) {
+        this.y = GROUND_Y - this.obj.r; this.landed = true;
+        this.flightTime = (performance.now() - this.startTime) / 1000;
+        const dist = Math.abs(this.x - TARGET_X) / SCALE;
+        this.hit = dist < 0.5;
+        updateStats(this.objIdx, this.hit, dist);
+        crossLog.push({ objIdx: this.objIdx, objName: this.obj.name, v0: this.v0Mps, angle: this.angleDeg, dist: dist, hit: this.hit, flightMs: this.flightTime * 1000, maxDrag: this.maxDrag });
+        if (crossLog.length > 50) crossLog.shift();
+        updateRealtimeParams(this); updateCrossTable(); return;
+      }
+    }
+    updateRealtimeParams(this);
+  }
+  draw(ctx) {
+    if (this.trail.length > 1) {
+      ctx.beginPath(); ctx.strokeStyle = this.hit ? '#ff6666' : '#6495ed'; ctx.lineWidth = 2;
+      for (let i = 0; i < this.trail.length - 1; i++) { ctx.moveTo(this.trail[i].x, this.trail[i].y); ctx.lineTo(this.trail[i+1].x, this.trail[i+1].y); }
+      ctx.stroke();
+    }
+    ctx.beginPath(); ctx.fillStyle = this.obj.color; ctx.arc(this.x, this.y, this.obj.r, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#000'; ctx.lineWidth = 2; ctx.stroke();
+    if (this.landed) {
+      const dist = Math.abs(this.x - TARGET_X) / SCALE;
+      ctx.font = this.hit ? 'bold 22px sans-serif' : '16px sans-serif';
+      ctx.fillStyle = this.hit ? '#cc0000' : '#666'; ctx.textAlign = 'center';
+      ctx.fillText(this.hit ? '命中！' : `偏差${dist.toFixed(1)}米`, this.x, this.y - 25);
+    }
+  }
+}
+
+function updateStats(objIdx, hit, distance) {
+  stats.total[objIdx]++; if (hit) stats.hits[objIdx]++;
+  stats.distances[objIdx].push(distance);
+  if (stats.distances[objIdx].length > 20) stats.distances[objIdx].shift();
+}
+
+function updateRealtimeParams(p) {
+  const status = p.landed ? (p.hit ? '<span class="hit">✅ 命中</span>' : '<span class="miss">❌ 未命中</span>') : '🚀 飞行中...';
+  const dist = p.landed ? (Math.abs(p.x - TARGET_X) / SCALE).toFixed(1) + 'm' : '—';
+  document.getElementById('p-status').innerHTML = status + (p.landed ? ` (偏差 ${dist})` : '');
+  document.getElementById('p-v0').textContent = p.v0Mps.toFixed(1) + ' m/s';
+  document.getElementById('p-angle').textContent = p.angleDeg.toFixed(1) + ' °';
+  document.getElementById('p-time').textContent = p.landed ? p.flightTime.toFixed(2) + ' s' : ((performance.now() - p.startTime)/1000).toFixed(2) + ' s';
+  document.getElementById('p-x').textContent = ((p.x - SLING_X) / SCALE).toFixed(1) + ' m';
+  document.getElementById('p-y').textContent = ((GROUND_Y - p.y) / SCALE).toFixed(1) + ' m';
+  document.getElementById('p-drag').textContent = p.maxDrag.toFixed(3) + ' N';
+}
+
+function updateCrossTable() {
+  const tbody = document.getElementById('crossTableBody');
+  tbody.innerHTML = '';
+  OBJECTS.forEach((obj, i) => {
+    const total = stats.total[i], hits = stats.hits[i];
+    const actualRate = total > 0 ? (hits / total * 100).toFixed(1) + '%' : '—';
+    const avgDist = stats.distances[i].length > 0 ? (stats.distances[i].reduce((a,b)=>a+b,0) / stats.distances[i].length).toFixed(2) + ' m' : '—';
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${obj.color};margin-right:6px;"></span>${obj.name}</td><td>职业${['球员','球员','投手','运动员'][i]}</td><td>${(obj.hit_rate*100).toFixed(1)}%</td><td>${total}</td><td>${hits}</td><td><span class="badge ${hits>0?'badge-hit':'badge-miss'}">${actualRate}</span></td><td>${avgDist}</td>`;
+    tbody.appendChild(tr);
+  });
+}
+updateCrossTable();
+
+function drawBackground() {
+  ctx.fillStyle = '#e8f4fc'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = '#228b22'; ctx.fillRect(0, GROUND_Y, canvas.width, canvas.height - GROUND_Y);
+  ctx.beginPath(); ctx.strokeStyle = '#000'; ctx.lineWidth = 3; ctx.moveTo(0, GROUND_Y); ctx.lineTo(canvas.width, GROUND_Y); ctx.stroke();
+  ctx.fillStyle = '#444'; ctx.font = '12px sans-serif'; ctx.textAlign = 'center';
+  for (let m = 0; m <= 15; m += 2) {
+    const x = SLING_X + m * SCALE;
+    ctx.beginPath(); ctx.moveTo(x, GROUND_Y); ctx.lineTo(x, GROUND_Y + 20); ctx.strokeStyle = '#555'; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillText(m + 'm', x, GROUND_Y + 35);
+  }
+  const x12 = SLING_X + 12 * SCALE;
+  ctx.beginPath(); ctx.strokeStyle = '#ff0000'; ctx.lineWidth = 3; ctx.moveTo(x12, GROUND_Y - 100); ctx.lineTo(x12, GROUND_Y + 20); ctx.stroke();
+  ctx.fillStyle = '#ff0000'; ctx.font = 'bold 14px sans-serif'; ctx.fillText('12米 目标', x12, GROUND_Y - 110);
+}
+
+function drawTarget() {
+  ctx.fillStyle = '#555'; ctx.beginPath(); ctx.roundRect(TARGET_X - 20, TARGET_Y - 15, 40, 30, 5); ctx.fill();
+  ctx.beginPath(); ctx.fillStyle = '#ff0000'; ctx.arc(TARGET_X, TARGET_Y, 5, 0, Math.PI * 2); ctx.fill();
+}
+
+function drawSlingAndPreview() {
+  ctx.strokeStyle = '#8b4513'; ctx.lineWidth = 8;
+  ctx.beginPath(); ctx.moveTo(SLING_X - 20, GROUND_Y); ctx.lineTo(SLING_X, SLING_Y); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(SLING_X + 20, GROUND_Y); ctx.lineTo(SLING_X, SLING_Y); ctx.stroke();
+  if (dragging && dragCurrent) {
+    ctx.strokeStyle = '#b00000'; ctx.lineWidth = 5;
+    ctx.beginPath(); ctx.moveTo(SLING_X - 15, SLING_Y); ctx.lineTo(dragCurrent.x, dragCurrent.y); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(SLING_X + 15, SLING_Y); ctx.lineTo(dragCurrent.x, dragCurrent.y); ctx.stroke();
+    const dragDx = SLING_X - dragCurrent.x, dragDy = SLING_Y - dragCurrent.y, power = 0.15;
+    let vx = dragDx * power, vy = -dragDy * power;
+    const maxV = OBJECTS[currentIdx].max_v, vTotal = Math.sqrt(vx**2 + vy**2);
+    if (vTotal > maxV) { const s = maxV / vTotal; vx *= s; vy *= s; }
+    const obj = OBJECTS[currentIdx], m = obj.mass, d = obj.d, Cd = obj.Cd, A = Math.PI * (d / 2) ** 2;
+    let px = SLING_X, py = SLING_Y, pvx = vx * SCALE, pvy = -vy * SCALE, dt = 0.005;
+    ctx.beginPath(); ctx.strokeStyle = '#999'; ctx.setLineDash([5, 5]); ctx.lineWidth = 2; ctx.moveTo(px, py);
+    for (let i = 0; i < 100; i++) {
+      const v = Math.sqrt(pvx**2 + pvy**2), vMps = v / SCALE;
+      if (vMps > 0.1) {
+        const F = 0.5 * RHO * vMps**2 * Cd * A, a = F / m * SCALE;
+        pvx += -a * (pvx / v) * dt; pvy += -a * (pvy / v) * dt;
+      }
+      pvy += G * SCALE * dt; px += pvx * dt; py += pvy * dt;
+      if (py >= GROUND_Y) break; if (i % 3 === 0) ctx.lineTo(px, py);
+    }
+    ctx.stroke(); ctx.setLineDash([]);
+    ctx.beginPath(); ctx.fillStyle = obj.color; ctx.arc(dragCurrent.x, dragCurrent.y, obj.r, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#000'; ctx.lineWidth = 2; ctx.stroke();
+    document.getElementById('p-v0').textContent = Math.sqrt(vx**2+vy**2).toFixed(1) + ' m/s';
+    document.getElementById('p-angle').textContent = (Math.atan2(vy, vx)*180/Math.PI).toFixed(1) + ' °';
+    document.getElementById('p-status').textContent = '🔴 蓄力中...';
+  }
+}
+
+function drawIdealParabola(vx, vy) {
+  ctx.beginPath(); ctx.strokeStyle = '#ff8c00'; ctx.setLineDash([8, 4]); ctx.lineWidth = 2; ctx.moveTo(SLING_X, SLING_Y);
+  let t = 0, dt = 0.02;
+  while (t < 3) {
+    t += dt;
+    const x = SLING_X + vx * SCALE * t, y = SLING_Y - vy * SCALE * t + 0.5 * G * SCALE * t * t;
+    if (y >= GROUND_Y) break; ctx.lineTo(x, y);
+  }
+  ctx.stroke(); ctx.setLineDash([]);
+}
+
+canvas.addEventListener('mousedown', e => {
+  const rect = canvas.getBoundingClientRect();
+  const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+  if (Math.hypot(mx - SLING_X, my - SLING_Y) < 100) { dragging = true; dragCurrent = { x: mx, y: my }; }
+});
+canvas.addEventListener('mousemove', e => {
+  if (dragging) { const rect = canvas.getBoundingClientRect(); dragCurrent = { x: e.clientX - rect.left, y: e.clientY - rect.top }; }
+});
+canvas.addEventListener('mouseup', e => {
+  if (!dragging) return; dragging = false;
+  const dragDx = SLING_X - dragCurrent.x, dragDy = SLING_Y - dragCurrent.y, power = 0.15;
+  let vx = dragDx * power, vy = -dragDy * power;
+  const maxV = OBJECTS[currentIdx].max_v, vTotal = Math.sqrt(vx**2 + vy**2);
+  if (vTotal > maxV) { const s = maxV / vTotal; vx *= s; vy *= s; }
+  projectiles.push(new Projectile(vx, vy, currentIdx));
+  projectiles[projectiles.length-1].idealVx = vx; projectiles[projectiles.length-1].idealVy = vy;
+});
+canvas.addEventListener('mouseleave', () => { dragging = false; });
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'r' || e.key === 'R') resetAll();
+  if (e.key === '1') { currentIdx = 0; initUI(); }
+  if (e.key === '2') { currentIdx = 1; initUI(); }
+  if (e.key === '3') { currentIdx = 2; initUI(); }
+  if (e.key === '4') { currentIdx = 3; initUI(); }
+});
+
+function resetAll() {
+  projectiles = []; stats.total = [0,0,0,0]; stats.hits = [0,0,0,0]; stats.distances = [[],[],[],[]]; crossLog.length = 0;
+  updateCrossTable();
+  document.getElementById('p-status').textContent = '等待发射'; document.getElementById('p-v0').textContent = '— m/s';
+  document.getElementById('p-angle').textContent = '— °'; document.getElementById('p-time').textContent = '— s';
+  document.getElementById('p-x').textContent = '— m'; document.getElementById('p-y').textContent = '— m'; document.getElementById('p-drag').textContent = '— N';
+}
+
+let lastTime = performance.now();
+function gameLoop() {
+  const now = performance.now(); const dt = Math.min((now - lastTime) / 1000, 0.05); lastTime = now;
+  projectiles.forEach(p => p.update(dt));
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  drawBackground(); drawTarget();
+  const lastP = projectiles[projectiles.length - 1];
+  if (lastP && lastP.idealVx !== undefined) drawIdealParabola(lastP.idealVx, lastP.idealVy);
+  drawSlingAndPreview(); projectiles.forEach(p => p.draw(ctx));
+  requestAnimationFrame(gameLoop);
+}
+requestAnimationFrame(gameLoop);
+</script>
 </body>
 </html>
